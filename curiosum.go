@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/gopacket"
@@ -13,8 +14,24 @@ import (
 	"github.com/google/gopacket/pcapgo"
 )
 
-func toHashKey(listenPort layers.TCPPort, remotePort layers.TCPPort, ipAddress net.IP) string {
-	return listenPort.String() + "_" + remotePort.String() + "_" + ipAddress.String()
+type sessionEntry struct {
+	Timestamp time.Time
+	Packets   []gopacket.Packet
+}
+
+type packetMessage struct {
+	Timestamp time.Time
+	SYN       bool
+	ACK       bool
+	SrcIP     net.IP
+	SrcPort   uint16
+	DstIP     net.IP
+	DstPort   uint16
+	Packet    gopacket.Packet
+}
+
+func toHashKey(listenPort uint16, remotePort uint16, ipAddress net.IP) string {
+	return strconv.Itoa(int(listenPort)) + "_" + strconv.Itoa(int(remotePort)) + "_" + ipAddress.String()
 }
 
 func writePcapFile(entries []gopacket.Packet, fileName string) {
@@ -24,6 +41,51 @@ func writePcapFile(entries []gopacket.Packet, fileName string) {
 	defer file.Close()
 	for _, packet := range entries {
 		writer.WritePacket(packet.Metadata().CaptureInfo, packet.Data())
+	}
+}
+
+func sessionMaster(packetMessages chan packetMessage) {
+	var sessions map[string]*sessionEntry
+	sessions = make(map[string]*sessionEntry)
+
+	// TODO: IF session ended received send data to file writer using
+	/*for k, v := range sessions {
+		fmt.Printf("Writing %v packets from %s\n", len(v.Packets), k)
+		writePcapFile(v.Packets, k+".pcap")
+	}*/
+
+	for message := range packetMessages {
+		//fmt.Println(message)
+		key := ""
+		if (message.SYN == true) && (message.ACK == false) {
+			key = toHashKey(message.DstPort, message.SrcPort, message.SrcIP)
+			fmt.Printf("Adding array for: %s\n", key)
+			entry := sessions[key]
+			// TODO: If not nil something is wrong or corner case...
+			if entry == nil {
+				sessions[key] = &sessionEntry{}
+			} else {
+				fmt.Printf("Warning: Entry already existed!\n")
+			}
+		}
+
+		key = toHashKey(message.DstPort, message.SrcPort, message.SrcIP)
+		entry := sessions[key]
+		if entry != nil {
+			fmt.Printf("Adding packet to key: %s\n", key)
+			entry.Packets = append(entry.Packets, message.Packet)
+			fmt.Printf("Len of array: %v\n", len(sessions[key].Packets))
+		} else {
+			keyTwo := toHashKey(message.SrcPort, message.DstPort, message.DstIP)
+			entry = sessions[keyTwo]
+			if entry != nil {
+
+				fmt.Printf("Adding packet to key two: %s\n", keyTwo)
+				entry.Packets = append(entry.Packets, message.Packet)
+				fmt.Printf("Len of array: %v\n", len(sessions[keyTwo].Packets))
+			}
+		}
+		fmt.Printf("Len of hashmap: %v\n", len(sessions))
 	}
 }
 
@@ -40,9 +102,11 @@ func main() {
 	ipLayer := layers.IPv4{}
 	tcpLayer := layers.TCP{}
 
-	var sessions map[string][]gopacket.Packet
-	sessions = make(map[string][]gopacket.Packet)
 	x := 0
+
+	packetMessageChannel := make(chan packetMessage)
+	go sessionMaster(packetMessageChannel)
+
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
 		parser := gopacket.NewDecodingLayerParser(
@@ -54,10 +118,9 @@ func main() {
 
 		foundLayerTypes := []gopacket.LayerType{}
 
-		err := parser.DecodeLayers(packet.Data(), &foundLayerTypes)
-		if err != nil {
-			fmt.Printf("Trouble decoding layer!\n")
-		}
+		parser.DecodeLayers(packet.Data(), &foundLayerTypes)
+
+		listenPortes := []uint16{21, 22, 23}
 
 		// while developing...
 		if x > 20 {
@@ -67,46 +130,27 @@ func main() {
 		for _, layerType := range foundLayerTypes {
 			if layerType == layers.LayerTypeTCP {
 
-				// TODO: if port in range we are interested in...
-				if (tcpLayer.DstPort == 23) || (tcpLayer.SrcPort == 23) {
+				var getPacket = false
+				for _, port := range listenPortes {
+					if ((uint16)(tcpLayer.DstPort) == port) || ((uint16)(tcpLayer.SrcPort) == port) {
+						getPacket = true
+					}
+				}
+				if getPacket {
 					x++
+					message := packetMessage{}
+					message.Timestamp = time.Now()
+					message.SYN = tcpLayer.SYN
+					message.ACK = tcpLayer.ACK
+					message.SrcIP = ipLayer.SrcIP
+					message.SrcPort = uint16(tcpLayer.SrcPort)
+					message.DstPort = uint16(tcpLayer.DstPort)
+					message.DstIP = ipLayer.DstIP
+					message.Packet = packet
 
-					// from remote to us
-					key := toHashKey(tcpLayer.DstPort, tcpLayer.SrcPort, ipLayer.SrcIP)
-
-					if (tcpLayer.SYN == true) && (tcpLayer.ACK == false) {
-						fmt.Printf("Adding array for: %s\n", key)
-						entry := sessions[key]
-						// TODO: If not nil something is wrong or corner case...
-						if entry == nil {
-							sessions[key] = []gopacket.Packet{}
-						}
-					}
-
-					entry := sessions[key]
-					if entry != nil {
-						fmt.Printf("Adding packet to key: %s\n", key)
-						sessions[key] = append(entry, packet)
-						fmt.Printf("Len of array: %v\n", len(sessions[key]))
-					} else {
-						keyTwo := toHashKey(tcpLayer.SrcPort, tcpLayer.DstPort, ipLayer.DstIP)
-						entry = sessions[keyTwo]
-						if entry != nil {
-
-							fmt.Printf("Adding packet to key two: %s\n", keyTwo)
-							sessions[keyTwo] = append(entry, packet)
-							fmt.Printf("Len of array: %v\n", len(sessions[keyTwo]))
-						}
-					}
-					fmt.Printf("Len of hashmap: %v\n", len(sessions))
-
+					packetMessageChannel <- message
 				}
 			}
 		}
-	}
-
-	for k, v := range sessions {
-		fmt.Printf("Writing %v packets from %s\n", len(v), k)
-		writePcapFile(v, k+".pcap")
 	}
 }
