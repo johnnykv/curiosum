@@ -1,22 +1,39 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/pcapgo"
+	zmq "github.com/pebbe/zmq4"
 )
 
 type sessionEntry struct {
 	Timestamp time.Time
 	Packets   []gopacket.Packet
+}
+
+type sessionStartMessage struct {
+	SessionID string `json:"sessionID"`
+	DstPort   uint16 `json:"DstPort"`
+	SrcIP     string `json:"SrcIp"`
+	SrcPort   uint16 `json:"SrcPort"`
+}
+
+type sessionEndMessage struct {
+	SessionID string `json:"sessionID"`
+	DstPort   uint16 `json:"DstPort"`
+	SrcIP     string `json:"SrcIp"`
+	SrcPort   uint16 `json:"SrcPort"`
 }
 
 type packetMessage struct {
@@ -28,6 +45,36 @@ type packetMessage struct {
 	DstIP     net.IP
 	DstPort   uint16
 	Packet    gopacket.Packet
+}
+
+func heraldingPoller() {
+	client, err := zmq.NewSocket(zmq.PULL)
+	if err != nil {
+		panic(err)
+	}
+	client.Connect("tcp://localhost:23400")
+	fmt.Println("Connected")
+
+	for {
+
+		reply, err := client.RecvMessage(0)
+
+		if err != nil {
+			fmt.Println("Error receiving message")
+			break
+		}
+
+		result := strings.SplitAfterN(reply[0], " ", 2)
+		messageType := result[0]
+		rawMessage := result[1]
+
+		message := sessionEndMessage{}
+		json.Unmarshal([]byte(rawMessage), &message)
+
+		fmt.Printf("Received message type: %s, Content: %v \n", messageType, message)
+	}
+
+	client.Close()
 }
 
 func toHashKey(listenPort uint16, remotePort uint16, ipAddress net.IP) string {
@@ -97,7 +144,7 @@ func main() {
 	}
 	defer handle.Close()
 	fmt.Printf("Running!\n")
-
+	go heraldingPoller()
 	ethLayer := layers.Ethernet{}
 	ipLayer := layers.IPv4{}
 	tcpLayer := layers.TCP{}
