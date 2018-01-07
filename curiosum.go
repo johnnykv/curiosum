@@ -47,7 +47,7 @@ type packetMessage struct {
 	Packet    gopacket.Packet
 }
 
-func heraldingPoller() {
+func heraldingPoller(sessionEndMessages chan sessionEndMessage) {
 	client, err := zmq.NewSocket(zmq.PULL)
 	if err != nil {
 		panic(err)
@@ -72,6 +72,7 @@ func heraldingPoller() {
 		json.Unmarshal([]byte(rawMessage), &message)
 
 		fmt.Printf("Received message type: %s, Content: %v \n", messageType, message)
+		sessionEndMessages <- message
 	}
 
 	client.Close()
@@ -91,7 +92,7 @@ func writePcapFile(entries []gopacket.Packet, fileName string) {
 	}
 }
 
-func sessionMaster(packetMessages chan packetMessage) {
+func sessionMaster(packetMessages chan packetMessage, sessionEndMessages chan sessionEndMessage) {
 	var sessions map[string]*sessionEntry
 	sessions = make(map[string]*sessionEntry)
 
@@ -100,40 +101,52 @@ func sessionMaster(packetMessages chan packetMessage) {
 		fmt.Printf("Writing %v packets from %s\n", len(v.Packets), k)
 		writePcapFile(v.Packets, k+".pcap")
 	}*/
+	fmt.Println("Session master!!!")
+	for {
+		select {
+		case message := <-packetMessages:
+			{
+				//fmt.Println(message)
+				key := ""
+				if (message.SYN == true) && (message.ACK == false) {
+					key = toHashKey(message.DstPort, message.SrcPort, message.SrcIP)
+					fmt.Printf("Adding array for: %s\n", key)
+					entry := sessions[key]
+					// TODO: If not nil something is wrong or corner case...
+					if entry == nil {
+						sessions[key] = &sessionEntry{}
+					} else {
+						fmt.Printf("Warning: Entry already existed!\n")
+					}
+				}
 
-	for message := range packetMessages {
-		//fmt.Println(message)
-		key := ""
-		if (message.SYN == true) && (message.ACK == false) {
-			key = toHashKey(message.DstPort, message.SrcPort, message.SrcIP)
-			fmt.Printf("Adding array for: %s\n", key)
-			entry := sessions[key]
-			// TODO: If not nil something is wrong or corner case...
-			if entry == nil {
-				sessions[key] = &sessionEntry{}
-			} else {
-				fmt.Printf("Warning: Entry already existed!\n")
+				key = toHashKey(message.DstPort, message.SrcPort, message.SrcIP)
+				entry := sessions[key]
+				if entry != nil {
+					fmt.Printf("Adding packet to key: %s\n", key)
+					entry.Packets = append(entry.Packets, message.Packet)
+					fmt.Printf("Len of array: %v\n", len(sessions[key].Packets))
+				} else {
+					keyTwo := toHashKey(message.SrcPort, message.DstPort, message.DstIP)
+					entry = sessions[keyTwo]
+					if entry != nil {
+
+						fmt.Printf("Adding packet to key two: %s\n", keyTwo)
+						entry.Packets = append(entry.Packets, message.Packet)
+						fmt.Printf("Len of array: %v\n", len(sessions[keyTwo].Packets))
+					}
+				}
+				fmt.Printf("Len of hashmap: %v\n", len(sessions))
+			}
+
+		case message := <-sessionEndMessages:
+			{
+				// TODO: Get entry from sessions map and sent to pcap file writer
+				fmt.Printf("session end message: %v\n", message)
 			}
 		}
-
-		key = toHashKey(message.DstPort, message.SrcPort, message.SrcIP)
-		entry := sessions[key]
-		if entry != nil {
-			fmt.Printf("Adding packet to key: %s\n", key)
-			entry.Packets = append(entry.Packets, message.Packet)
-			fmt.Printf("Len of array: %v\n", len(sessions[key].Packets))
-		} else {
-			keyTwo := toHashKey(message.SrcPort, message.DstPort, message.DstIP)
-			entry = sessions[keyTwo]
-			if entry != nil {
-
-				fmt.Printf("Adding packet to key two: %s\n", keyTwo)
-				entry.Packets = append(entry.Packets, message.Packet)
-				fmt.Printf("Len of array: %v\n", len(sessions[keyTwo].Packets))
-			}
-		}
-		fmt.Printf("Len of hashmap: %v\n", len(sessions))
 	}
+	fmt.Println("Go gone!")
 }
 
 func main() {
@@ -144,7 +157,7 @@ func main() {
 	}
 	defer handle.Close()
 	fmt.Printf("Running!\n")
-	go heraldingPoller()
+
 	ethLayer := layers.Ethernet{}
 	ipLayer := layers.IPv4{}
 	tcpLayer := layers.TCP{}
@@ -152,7 +165,11 @@ func main() {
 	x := 0
 
 	packetMessageChannel := make(chan packetMessage)
-	go sessionMaster(packetMessageChannel)
+	sessionEndChannel := make(chan sessionEndMessage)
+
+	go heraldingPoller(sessionEndChannel)
+
+	go sessionMaster(packetMessageChannel, sessionEndChannel)
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
