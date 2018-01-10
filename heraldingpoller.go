@@ -8,7 +8,7 @@ import (
 	zmq "github.com/pebbe/zmq4"
 )
 
-func heraldingPoller(sessionEndMessages chan sessionEndMessage) {
+func heraldingPoller(sessionMessages chan sessionMessage) {
 	client, err := zmq.NewSocket(zmq.PULL)
 	if err != nil {
 		panic(err)
@@ -29,11 +29,11 @@ func heraldingPoller(sessionEndMessages chan sessionEndMessage) {
 		messageType := result[0]
 		rawMessage := result[1]
 
-		message := sessionEndMessage{}
+		message := sessionMessage{}
 		json.Unmarshal([]byte(rawMessage), &message)
 
 		fmt.Printf("Received message type: %s, Content: %v \n", messageType, message)
-		sessionEndMessages <- message
+		sessionMessages <- message
 	}
 
 	client.Close()

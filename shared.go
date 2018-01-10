@@ -18,18 +18,12 @@ type sessionEntry struct {
 	Packets   []gopacket.Packet
 }
 
-type sessionStartMessage struct {
-	SessionID string `json:"sessionID"`
-	DstPort   uint16 `json:"DstPort"`
-	SrcIP     string `json:"SrcIp"`
-	SrcPort   uint16 `json:"SrcPort"`
-}
-
-type sessionEndMessage struct {
-	SessionID string `json:"sessionID"`
-	DstPort   uint16 `json:"DstPort"`
-	SrcIP     string `json:"SrcIp"`
-	SrcPort   uint16 `json:"SrcPort"`
+type sessionMessage struct {
+	SessionID  string `json:"sessionID"`
+	DstPort    uint16 `json:"DstPort"`
+	SrcIP      string `json:"SrcIp"`
+	SrcPort    uint16 `json:"SrcPort"`
+	SessionEnd bool   `json:"SessionEnded"`
 }
 
 type packetMessage struct {
