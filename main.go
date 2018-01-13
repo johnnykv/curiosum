@@ -1,13 +1,21 @@
 package main
 
 import (
-	"fmt"
+	"flag"
+	"os"
 	"sync"
 )
 
 func main() {
 
-	fmt.Printf("Running!\n")
+	var captureInterface string
+	flag.StringVar(&captureInterface, "i", "", "The interface to listen on")
+	flag.Parse()
+
+	if captureInterface == "" {
+		flag.Usage()
+		os.Exit(2)
+	}
 
 	packetMessageChannel := make(chan packetMessage)
 	sessionChannel := make(chan sessionMessage)
@@ -18,6 +26,6 @@ func main() {
 	go heraldingPoller(sessionChannel)
 	go pcapWriter(pcapWriterChannel)
 	go sessionMaster(&wg, packetMessageChannel, sessionChannel, pcapWriterChannel)
-	go packetDumper(packetMessageChannel)
+	go packetDumper(packetMessageChannel, captureInterface)
 	wg.Wait()
 }

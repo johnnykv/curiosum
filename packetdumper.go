@@ -9,13 +9,13 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
-func packetDumper(packetMessageChannel chan packetMessage) {
+func packetDumper(packetMessageChannel chan packetMessage, captureInterface string) {
 
 	ethLayer := layers.Ethernet{}
 	ipLayer := layers.IPv4{}
 	tcpLayer := layers.TCP{}
 
-	handle, err := pcap.OpenLive("en1", 1600, false, 30*time.Second)
+	handle, err := pcap.OpenLive(captureInterface, 1600, false, 30*time.Second)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -34,6 +34,7 @@ func packetDumper(packetMessageChannel chan packetMessage) {
 
 		parser.DecodeLayers(packet.Data(), &foundLayerTypes)
 
+		// TODO: Receive these from Heralding
 		listenPortes := []uint16{21, 22, 23}
 
 		for _, layerType := range foundLayerTypes {
