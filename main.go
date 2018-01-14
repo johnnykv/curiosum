@@ -20,12 +20,13 @@ func main() {
 	packetMessageChannel := make(chan packetMessage)
 	sessionChannel := make(chan sessionMessage)
 	pcapWriterChannel := make(chan sessionEntry)
+	listenPortChannel := make(chan []uint16)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go heraldingPoller(sessionChannel)
+	go heraldingPoller(sessionChannel, listenPortChannel)
 	go pcapWriter(pcapWriterChannel)
 	go sessionMaster(&wg, packetMessageChannel, sessionChannel, pcapWriterChannel)
-	go packetDumper(packetMessageChannel, captureInterface)
+	go packetDumper(packetMessageChannel, captureInterface, listenPortChannel)
 	wg.Wait()
 }

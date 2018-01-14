@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -9,17 +10,22 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
-func packetDumper(packetMessageChannel chan packetMessage, captureInterface string) {
+func packetDumper(packetMessageChannel chan packetMessage, captureInterface string, listenPortChannel chan []uint16) {
 
 	ethLayer := layers.Ethernet{}
 	ipLayer := layers.IPv4{}
 	tcpLayer := layers.TCP{}
 
-	handle, err := pcap.OpenLive(captureInterface, 1600, false, 30*time.Second)
+	handle, err := pcap.OpenLive(captureInterface, 1600, true, pcap.BlockForever)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer handle.Close()
+
+	// TODO: Receive these from Heralding
+	//var listenPorts []uint16
+	listenPorts := <-listenPortChannel
+	fmt.Printf("Listen interface %s, ports: %v\n", captureInterface, listenPorts)
 
 	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
 	for packet := range packetSource.Packets() {
@@ -33,18 +39,12 @@ func packetDumper(packetMessageChannel chan packetMessage, captureInterface stri
 		foundLayerTypes := []gopacket.LayerType{}
 
 		parser.DecodeLayers(packet.Data(), &foundLayerTypes)
-
-		// TODO: Receive these from Heralding
-		listenPortes := []uint16{21, 22, 23}
-
 		for _, layerType := range foundLayerTypes {
-
 			if layerType == layers.LayerTypeTCP {
 				var getPacket = false
-				for _, port := range listenPortes {
-					if ((uint16)(tcpLayer.DstPort) == port) || ((uint16)(tcpLayer.SrcPort) == port) {
+				for _, port := range listenPorts {
+					if ((uint16)(tcpLayer.DstPort) == 23) || ((uint16)(tcpLayer.SrcPort) == port) {
 						getPacket = true
-
 					}
 				}
 				if getPacket {

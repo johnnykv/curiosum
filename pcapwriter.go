@@ -13,7 +13,7 @@ func pcapWriter(pcapWriter chan sessionEntry) {
 		//reply, err := sessionEntry.RecvMessage(0)
 		sessionEntry := <-pcapWriter
 		fileName := sessionEntry.SessionID + ".pcap"
-		fmt.Printf("Writing to %s", fileName)
+		fmt.Printf("Writing to %s\n", fileName)
 		file, _ := os.Create(fileName)
 		writer := pcapgo.NewWriter(file)
 		writer.WriteFileHeader(1600, layers.LinkTypeEthernet)

@@ -17,9 +17,9 @@ func sessionMaster(wg *sync.WaitGroup, packetMessages chan packetMessage, sessio
 		case message := <-packetMessages:
 			{
 				key := toHashKey(message.DstPort, message.SrcPort, message.SrcIP)
+
 				if (message.SYN == true) && (message.ACK == false) {
 					entry := sessions[key]
-					// TODO: If not nil something is wrong or corner case...
 					if entry == nil {
 						sessions[key] = &sessionEntry{}
 						sessions[key].Timestamp = time.Now()
@@ -45,7 +45,7 @@ func sessionMaster(wg *sync.WaitGroup, packetMessages chan packetMessage, sessio
 				// this is a session start message
 				if message.SessionEnd == false {
 					// TODO: check and reset timer
-				} else { // this is a session end message else
+				} else { // this is a session end message
 					entry := sessions[key]
 					if entry != nil {
 						entry.SessionID = message.SessionID
