@@ -22,8 +22,7 @@ func packetDumper(packetMessageChannel chan packetMessage, captureInterface stri
 	}
 	defer handle.Close()
 
-	// TODO: Receive these from Heralding
-	//var listenPorts []uint16
+	// TODO: Restart packetSource when receiving this message if ports are changed
 	listenPorts := <-listenPortChannel
 	fmt.Printf("Listen interface %s, ports: %v\n", captureInterface, listenPorts)
 

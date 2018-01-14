@@ -16,6 +16,7 @@ type sessionEntry struct {
 	Timestamp time.Time
 	SessionID string
 	Packets   []gopacket.Packet
+	Heralding bool
 }
 
 type sessionMessage struct {
