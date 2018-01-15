@@ -72,11 +72,7 @@ func sessionMaster(wg *sync.WaitGroup, packetMessages chan packetMessage, sessio
 			}
 		case key := <-killChannel:
 			{
-				fmt.Printf("Kill signal received for %v\n", key)
-				fmt.Println(len(sessions))
 				delete(sessions, key)
-				fmt.Println(len(sessions))
-
 			}
 		}
 	}

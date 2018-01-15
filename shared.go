@@ -14,6 +14,7 @@ func toHashKey(listenPort uint16, remotePort uint16, ipAddress net.IP) string {
 
 type sessionEntry struct {
 	Timestamp time.Time
+	Filename  string
 	SessionID string
 	Packets   []gopacket.Packet
 	Heralding bool

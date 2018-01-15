@@ -13,8 +13,9 @@ func heraldingPoller(sessionMessages chan sessionMessage, listenPortMessages cha
 	if err != nil {
 		panic(err)
 	}
-	client.Connect("tcp://localhost:23400")
-	fmt.Println("Connected")
+	socketURL := "tcp://localhost:23400"
+	client.Connect(socketURL)
+	fmt.Printf("Connected to Heralding instance on %s\n", socketURL)
 
 	for {
 
@@ -29,14 +30,13 @@ func heraldingPoller(sessionMessages chan sessionMessage, listenPortMessages cha
 		messageType := strings.TrimSpace(result[0])
 		rawMessage := result[1]
 
-		fmt.Printf("Received message type: %s, Raw content: %v\n", messageType, rawMessage)
+		//fmt.Printf("Received message type: %s, Raw content: %v\n", messageType, rawMessage)
 		if messageType == "session_ended" {
 			message := sessionMessage{}
 			json.Unmarshal([]byte(rawMessage), &message)
 			sessionMessages <- message
 		} else if messageType == "listen_ports" {
 			var listenPorts []uint16
-			fmt.Println("SENDIGN")
 			json.Unmarshal([]byte(rawMessage), &listenPorts)
 			listenPortMessages <- listenPorts
 		} else {
