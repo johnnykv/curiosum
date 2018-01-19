@@ -37,7 +37,7 @@ func sessionMaster(wg *sync.WaitGroup, packetMessages chan packetMessage,
 					if entry == nil {
 						sessions[key] = &sessionEntry{}
 						sessions[key].Timestamp = time.Now()
-						entry.Packets = append(entry.Packets, message.Packet)
+						sessions[key].Packets = append(sessions[key].Packets, message.Packet)
 						sessions[key].Heralding = false
 						// kill session if no word has arrived from Heralding before timeout...
 						go entryKiller(sessions[key], key, killChannel, sessionTimeoutSeconds)
