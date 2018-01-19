@@ -7,7 +7,9 @@ import (
 	"time"
 )
 
-func sessionMaster(wg *sync.WaitGroup, packetMessages chan packetMessage, sessionMessages chan sessionMessage, pcapWriter chan sessionEntry) {
+func sessionMaster(wg *sync.WaitGroup, packetMessages chan packetMessage,
+	sessionMessages chan sessionMessage, pcapWriter chan sessionEntry,
+	heraldingIP net.IP) {
 	defer wg.Done()
 	var sessions map[string]*sessionEntry
 	sessions = make(map[string]*sessionEntry)
@@ -24,32 +26,39 @@ func sessionMaster(wg *sync.WaitGroup, packetMessages chan packetMessage, sessio
 		case message := <-packetMessages:
 			{
 				key := toHashKey(message.DstPort, message.SrcPort, message.SrcIP)
-
+				entry := sessions[key]
+				// SYN packet, check if we want this stream
 				if (message.SYN == true) && (message.ACK == false) {
-					entry := sessions[key]
+					// user supplied a IP address of Heralding, use it!
+					if heraldingIP != nil && !heraldingIP.Equal(message.DstIP) {
+						break
+					}
+					// it's a keeper!
 					if entry == nil {
 						sessions[key] = &sessionEntry{}
 						sessions[key].Timestamp = time.Now()
+						entry.Packets = append(entry.Packets, message.Packet)
 						sessions[key].Heralding = false
+						// kill session if no word has arrived from Heralding before timeout...
 						go entryKiller(sessions[key], key, killChannel, sessionTimeoutSeconds)
 					} else {
 						fmt.Printf("Warning: Entry already exist: %s\n", key)
 					}
-				}
-
-				entry := sessions[key]
-				if entry != nil {
-					entry.Packets = append(entry.Packets, message.Packet)
-					entry.Timestamp = time.Now()
 				} else {
-					keyTwo := toHashKey(message.SrcPort, message.DstPort, message.DstIP)
-					entry = sessions[keyTwo]
 					if entry != nil {
 						entry.Packets = append(entry.Packets, message.Packet)
 						entry.Timestamp = time.Now()
+					} else {
+						keyTwo := toHashKey(message.SrcPort, message.DstPort, message.DstIP)
+						entry = sessions[keyTwo]
+						if entry != nil {
+							entry.Packets = append(entry.Packets, message.Packet)
+							entry.Timestamp = time.Now()
+						}
 					}
 				}
 			}
+
 		case message := <-sessionMessages:
 			{
 				key := toHashKey(message.DstPort, message.SrcPort, net.ParseIP(message.SrcIP))

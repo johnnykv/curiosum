@@ -12,7 +12,8 @@ import (
 	"github.com/google/gopacket/pcap"
 )
 
-func packetDumperWorker(packetMessageChannel chan packetMessage, killChannel chan string, captureInterface string, listenPorts []uint16) {
+func packetDumperWorker(packetMessageChannel chan packetMessage,
+	killChannel chan string, captureInterface string, listenPorts []uint16) {
 
 	ethLayer := layers.Ethernet{}
 	ipLayer := layers.IPv4{}
