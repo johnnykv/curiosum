@@ -8,21 +8,27 @@ import (
 	zmq "github.com/pebbe/zmq4"
 )
 
-func heraldingPoller(sessionMessages chan sessionMessage, listenPortMessages chan []uint16) {
+func heraldingPoller(sessionMessages chan sessionMessage, listenPortMessages chan []uint16, heraldingPort uint16) {
 	client, err := zmq.NewSocket(zmq.PULL)
 	if err != nil {
 		panic(err)
 	}
-	socketURL := "tcp://localhost:23400"
-	client.Connect(socketURL)
-	fmt.Printf("Connected to Heralding instance on %s\n", socketURL)
+	socketURL := fmt.Sprintf("tcp://localhost:%d", heraldingPort)
+	err = client.Connect(socketURL)
+
+	if err != nil {
+		fmt.Printf("Error connecting: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Connecting to Heralding instance on %s\n", socketURL)
 
 	for {
 
 		data, err := client.RecvMessage(0)
 
 		if err != nil {
-			fmt.Println("Error receiving message")
+			fmt.Printf("Error receiving message: %v\n", err)
 			break
 		}
 

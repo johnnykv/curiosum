@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"math"
 	"os"
 	"sync"
 )
@@ -9,10 +10,12 @@ import (
 func main() {
 
 	var captureInterface string
+	var heraldingPort uint
 	flag.StringVar(&captureInterface, "i", "", "The interface to listen on")
+	flag.UintVar(&heraldingPort, "p", 23400, "The interface to listen on")
 	flag.Parse()
 
-	if captureInterface == "" {
+	if captureInterface == "" || heraldingPort > math.MaxUint16 {
 		flag.Usage()
 		os.Exit(2)
 	}
@@ -24,7 +27,7 @@ func main() {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go heraldingPoller(sessionChannel, listenPortChannel)
+	go heraldingPoller(sessionChannel, listenPortChannel, uint16(heraldingPort))
 	go pcapWriter(pcapWriterChannel)
 	go sessionMaster(&wg, packetMessageChannel, sessionChannel, pcapWriterChannel)
 	go packetDumper(packetMessageChannel, captureInterface, listenPortChannel)
